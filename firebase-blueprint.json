@@ -1,0 +1,124 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "A film production project",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId", "createdAt"]
+    },
+    "Scene": {
+      "title": "Scene",
+      "description": "A scene in the script",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "number": { "type": "string" },
+        "title": { "type": "string" },
+        "intExt": { "type": "string", "enum": ["INT", "EXT", "INT/EXT"] },
+        "location": { "type": "string" },
+        "dayNight": { "type": "string", "enum": ["DAY", "NIGHT", "DUSK", "DAWN"] },
+        "synopsis": { "type": "string" },
+        "cast": { "type": "array", "items": { "type": "string" } },
+        "props": { "type": "array", "items": { "type": "string" } },
+        "wardrobe": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" },
+        "directorNotes": { "type": "string" },
+        "emotionalIntensity": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "characterMentalState": { "type": "string" },
+        "pageCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["not-started", "in-progress", "completed"] },
+        "order": { "type": "integer" }
+      },
+      "required": ["projectId", "number", "order"]
+    },
+    "Storyboard": {
+      "title": "Storyboard",
+      "description": "An image for a scene",
+      "type": "object",
+      "properties": {
+        "sceneId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "order": { "type": "integer" }
+      },
+      "required": ["sceneId", "projectId", "imageUrl", "order"]
+    },
+    "Shot": {
+      "title": "Shot",
+      "description": "A specific camera shot",
+      "type": "object",
+      "properties": {
+        "sceneId": { "type": "string" },
+        "projectId": { "type": "string" },
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "priority": { "type": "string", "enum": ["HIGH", "MEDIUM", "LOW"] },
+        "duration": { "type": "string" },
+        "completed": { "type": "boolean" },
+        "order": { "type": "integer" }
+      },
+      "required": ["sceneId", "projectId", "type", "order"]
+    },
+    "StripboardItem": {
+      "title": "Stripboard Item",
+      "description": "A scheduled scene on a shoot day",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "sceneId": { "type": "string" },
+        "shootDay": { "type": "integer" },
+        "order": { "type": "integer" }
+      },
+      "required": ["projectId", "sceneId", "shootDay", "order"]
+    },
+    "ScriptVersion": {
+      "title": "Script Version",
+      "description": "Metadata for an uploaded screenplay version",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "fileName": { "type": "string" },
+        "uploadDate": { "type": "string", "format": "date-time" },
+        "version": { "type": "number" },
+        "status": { "type": "string", "enum": ["processing", "ready", "error"] },
+        "sceneCount": { "type": "integer" }
+      },
+      "required": ["projectId", "fileName", "uploadDate", "version", "status"]
+    }
+  },
+  "firestore": {
+    "projects": {
+      "schema": "Project",
+      "description": "Collection of film projects"
+    },
+    "scenes": {
+      "schema": "Scene",
+      "description": "Collection of scenes for all projects"
+    },
+    "scriptVersions": {
+      "schema": "ScriptVersion",
+      "description": "History of uploaded script files"
+    },
+    "storyboards": {
+      "schema": "Storyboard",
+      "description": "Collection of storyboard frames"
+    },
+    "shots": {
+      "schema": "Shot",
+      "description": "Collection of camera shots"
+    },
+    "stripboard": {
+      "schema": "StripboardItem",
+      "description": "Collection of scheduled items"
+    }
+  }
+}
