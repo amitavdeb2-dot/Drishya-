@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../lib/firebase';
-import { collection, query, where, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, deleteDoc, doc, serverTimestamp, onSnapshot, updateDoc } from 'firebase/firestore';
 import { Project, ProductionRole, Collaborator } from '../types';
-import { Users, Plus, Mail, Shield, Trash2, Loader2, CheckCircle2, Copy, Check } from 'lucide-react';
+import { Users, Plus, Mail, Shield, Trash2, Loader2, CheckCircle2, Copy, Check, Edit2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { OperationType, handleFirestoreError, cn, hasPermission } from '../lib/utils';
 
@@ -20,7 +20,28 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+
   const canManageTeam = hasPermission(userRole, 'manage_team');
+
+  useEffect(() => {
+    setLoading(true);
+    const q = query(
+      collection(db, 'projectMembers'),
+      where('projectId', '==', project.id)
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Collaborator));
+      setCollaborators(data);
+      setLoading(false);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'projectMembers', auth);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [project.id]);
 
   const copyInviteLink = () => {
     const url = `${window.location.origin}?project=${project.id}`;
@@ -29,23 +50,14 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
     setTimeout(() => setCopied(false), 2000);
   };
 
-  useEffect(() => {
-    fetchCollaborators();
-  }, [project]);
-
-  const fetchCollaborators = async () => {
+  const handleUpdateRole = async (collabId: string, newRole: ProductionRole) => {
     try {
-      const q = query(
-        collection(db, 'collaborators'),
-        where('projectId', '==', project.id)
-      );
-      const snapshot = await getDocs(q);
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Collaborator));
-      setCollaborators(data);
+      await updateDoc(doc(db, 'projectMembers', collabId), {
+        role: newRole
+      });
+      setEditingRoleId(null);
     } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'collaborators', auth);
-    } finally {
-      setLoading(false);
+      handleFirestoreError(error, OperationType.UPDATE, 'projectMembers', auth);
     }
   };
 
@@ -65,7 +77,7 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
       }
 
       // 1. Add to Firestore
-      await addDoc(collection(db, 'collaborators'), {
+      await addDoc(collection(db, 'projectMembers'), {
         projectId: project.id,
         email: email.toLowerCase(),
         role: selectedRole,
@@ -98,20 +110,19 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
       }
 
       setEmail('');
-      fetchCollaborators();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'collaborators', auth);
+      handleFirestoreError(error, OperationType.CREATE, 'projectMembers', auth);
     } finally {
       setInviting(false);
     }
   };
 
   const removeCollaborator = async (id: string) => {
+    if (!window.confirm("Are you sure you want to remove this team member?")) return;
     try {
-      await deleteDoc(doc(db, 'collaborators', id));
-      setCollaborators(collaborators.filter(c => c.id !== id));
+      await deleteDoc(doc(db, 'projectMembers', id));
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, 'collaborators', auth);
+      handleFirestoreError(error, OperationType.DELETE, 'projectMembers', auth);
     }
   };
 
@@ -121,8 +132,8 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
     <div className="h-full bg-brand-bg md:p-8 overflow-y-auto">
       <div className="max-w-4xl mx-auto space-y-8 p-6 md:p-0">
         <header>
-           <h1 className="text-3xl font-black tracking-tight text-brand-gray-900 uppercase italic">Team & Permissions</h1>
-           <p className="text-[10px] text-brand-gray-500 font-bold uppercase tracking-[0.2em] mt-2">Manage production hierarchy and access control</p>
+           <h1 className="text-3xl font-black tracking-tight text-brand-gray-900 uppercase italic">Production Team</h1>
+           <p className="text-[10px] text-brand-gray-500 font-bold uppercase tracking-[0.2em] mt-2">Manage production hierarchy and member access</p>
         </header>
 
         {canManageTeam && (
@@ -215,40 +226,72 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
                  </div>
               </div>
 
-              {collaborators.map((collab) => (
+               {collaborators.map((collab) => (
                 <motion.div
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   key={collab.id}
                   className="bg-white border border-brand-gray-100 p-5 rounded-2xl flex items-center justify-between shadow-sm hover:shadow-md transition-all group"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-4 flex-1">
                     <div className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center border-2",
+                      "w-12 h-12 rounded-full flex items-center justify-center border-2 shrink-0",
                       collab.userId ? "bg-green-50 text-green-600 border-green-500/10" : "bg-brand-gray-50 text-brand-gray-400 border-brand-gray-200"
                     )}>
-                       {collab.userId ? <CheckCircle2 size={20} /> : <Mail size={20} />}
+                       {collab.userId ? <Users size={20} /> : <Mail size={20} />}
                     </div>
-                    <div>
-                       <div className="text-sm font-black text-brand-gray-900">{collab.email}</div>
-                       <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] font-bold text-brand-gray-400 uppercase tracking-widest">{collab.role}</span>
+                    <div className="flex-1 min-w-0">
+                       <div className="text-sm font-black text-brand-gray-900 truncate">{collab.email}</div>
+                       <div className="flex flex-wrap items-center gap-y-1 gap-x-2 mt-1">
+                          {editingRoleId === collab.id && canManageTeam ? (
+                            <select
+                              autoFocus
+                              value={collab.role}
+                              onChange={(e) => handleUpdateRole(collab.id, e.target.value as ProductionRole)}
+                              onBlur={() => setEditingRoleId(null)}
+                              className="text-[10px] font-bold bg-brand-gray-50 border border-brand-gray-200 rounded px-2 py-0.5"
+                            >
+                              {Object.values(ProductionRole).map(r => <option key={r} value={r}>{r}</option>)}
+                            </select>
+                          ) : (
+                            <span 
+                              onClick={() => canManageTeam && setEditingRoleId(collab.id)}
+                              className={cn(
+                                "text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full border",
+                                canManageTeam ? "cursor-pointer hover:bg-brand-gray-50 bg-white border-brand-gray-200" : "bg-brand-gray-100 border-transparent text-brand-gray-600"
+                              )}
+                            >
+                              {collab.role}
+                            </span>
+                          )}
                           <span className="w-1 h-1 bg-brand-gray-200 rounded-full"></span>
                           <span className="text-[9px] font-medium text-brand-gray-400 italic">
-                            {collab.userId ? 'Joined Team' : 'Invitation Pending'}
+                            {collab.joinedAt ? `Joined ${new Date(collab.joinedAt?.toDate?.() || collab.joinedAt).toLocaleDateString()}` : 'Invitation Pending'}
                           </span>
                        </div>
                     </div>
                   </div>
                   
-                  {canManageTeam && (
-                    <button
-                      onClick={() => removeCollaborator(collab.id)}
-                      className="p-3 text-brand-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {canManageTeam && !editingRoleId && (
+                      <button
+                        onClick={() => setEditingRoleId(collab.id)}
+                        className="p-2 text-brand-gray-300 hover:text-brand-blue hover:bg-brand-blue/5 rounded-xl transition-all"
+                        title="Edit Role"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    )}
+                    {canManageTeam && (
+                      <button
+                        onClick={() => removeCollaborator(collab.id)}
+                        className="p-2 text-brand-gray-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                        title="Remove Member"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                  </div>
                 </motion.div>
               ))}
            </div>
@@ -257,9 +300,12 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
         <section className="bg-brand-gray-50 border border-brand-gray-200 rounded-2xl p-6">
            <h4 className="text-[10px] font-black uppercase tracking-widest text-brand-gray-900 mb-4">Role Privileges Reference</h4>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <RoleCard role={ProductionRole.AD} color="blue" description="Full stripboard control, updating shot completion, and live shoot access." />
-              <RoleCard role={ProductionRole.DOP} color="indigo" description="Modify shot types, camera movements, and technical camera specs." />
-              <RoleCard role={ProductionRole.ART} color="orange" description="Specialized art direction notes and set/prop considerations." />
+              <RoleCard role={ProductionRole.AD} color="blue" description="Manages schedule, stripboard order, and full access to Live Shoot Mode progress." />
+              <RoleCard role={ProductionRole.PM} color="emerald" description="Logistics master. Manages team, schedule, and adds production/logistics notes." />
+              <RoleCard role={ProductionRole.DOP} color="indigo" description="Cinematography lead. Edits shot types, camera movements, and technical camera specs." />
+              <RoleCard role={ProductionRole.ART} color="orange" description="Art department lead. Manages prop lists, wardrobe notes, and set design details." />
+              <RoleCard role={ProductionRole.SOUND} color="purple" description="Audio specialist. Access to breakdown and shoot mode for adding sound-related notes." />
+              <RoleCard role={ProductionRole.GAFFER} color="amber" description="Lighting specialist. Adds electrical and lighting setup notes per scene." />
            </div>
         </section>
       </div>
@@ -271,7 +317,10 @@ function RoleCard({ role, color, description }: { role: string, color: string, d
   const colors: Record<string, string> = {
     blue: 'bg-blue-50 text-blue-700 border-blue-200',
     indigo: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    orange: 'bg-orange-50 text-orange-700 border-orange-200'
+    orange: 'bg-orange-50 text-orange-700 border-orange-200',
+    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200'
   };
 
   return (

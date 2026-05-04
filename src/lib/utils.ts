@@ -15,9 +15,10 @@ export const ROLE_CONFIG = {
       "edit_storyboard",
       "edit_schedule",
       "manage_team",
-      "shoot_mode"
+      "shoot_mode",
+      "delete_project"
     ],
-    modules: ['script', 'breakdown', 'storyboard', 'stripboard', 'schedule', 'callsheet', 'shoot', 'collaborators'],
+    modules: ['script', 'breakdown', 'storyboard', 'stripboard', 'schedule', 'callsheet', 'shoot', 'projectMembers'],
     fields: {
       storyboard: ['title', 'shotType', 'cameraMovement', 'cameraNotes', 'artNotes', 'technicalSpecs', 'completed'],
       stripboard: ['order', 'dayNight', 'intExt', 'location'],
@@ -29,7 +30,8 @@ export const ROLE_CONFIG = {
     capabilities: [
       "edit_schedule",
       "shoot_mode",
-      "update_progress"
+      "update_progress",
+      "manage_stripboard"
     ],
     modules: ['breakdown', 'storyboard', 'stripboard', 'schedule', 'callsheet', 'shoot'],
     fields: {
@@ -39,11 +41,25 @@ export const ROLE_CONFIG = {
       script: []
     }
   },
+  [ProductionRole.PM]: {
+    capabilities: [
+      "edit_schedule",
+      "manage_logistics",
+      "manage_team"
+    ],
+    modules: ['breakdown', 'schedule', 'callsheet', 'projectMembers'],
+    fields: {
+      storyboard: [],
+      stripboard: ['order'],
+      breakdown: ['location', 'notes', 'logistics', 'production_notes'],
+      script: []
+    }
+  },
   [ProductionRole.DOP]: {
     capabilities: [
       "view_script",
       "edit_shotlist",
-      "edit_storyboard_camera"
+      "edit_camera_specs"
     ],
     modules: ['breakdown', 'storyboard', 'shoot'],
     fields: {
@@ -56,26 +72,52 @@ export const ROLE_CONFIG = {
   [ProductionRole.ART]: {
     capabilities: [
       "view_script",
-      "edit_storyboard_design"
+      "edit_design_notes"
     ],
     modules: ['breakdown', 'storyboard'],
     fields: {
       storyboard: ['title', 'artNotes'],
       stripboard: [],
-      breakdown: ['props', 'wardrobe', 'notes'],
+      breakdown: ['props', 'wardrobe', 'design_notes', 'notes'],
+      script: []
+    }
+  },
+  [ProductionRole.SOUND]: {
+    capabilities: [
+      "view_script",
+      "add_sound_notes"
+    ],
+    modules: ['breakdown', 'shoot'],
+    fields: {
+      storyboard: [],
+      stripboard: [],
+      breakdown: ['sound_notes', 'notes'],
+      script: []
+    }
+  },
+  [ProductionRole.GAFFER]: {
+    capabilities: [
+      "view_script",
+      "add_lighting_notes"
+    ],
+    modules: ['breakdown', 'shoot'],
+    fields: {
+      storyboard: [],
+      stripboard: [],
+      breakdown: ['lighting_notes', 'notes'],
       script: []
     }
   },
   [ProductionRole.ACTOR]: {
     capabilities: [
       "view_assigned_scenes",
-      "report_issue"
+      "report_availability"
     ],
-    modules: ['breakdown', 'shoot'],
+    modules: ['breakdown'],
     fields: {
       storyboard: [],
       stripboard: [],
-      breakdown: ['notes'],
+      breakdown: ['availability_notes'],
       script: []
     }
   }

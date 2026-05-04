@@ -17,6 +17,7 @@ export default function BreakdownModule({ project, userRole }: BreakdownModulePr
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [saving, setSaving] = useState(false);
+  const [showOnlyMyScenes, setShowOnlyMyScenes] = useState(userRole === ProductionRole.ACTOR);
 
   // Form states
   const [editData, setEditData] = useState<Partial<Scene>>({});
@@ -36,6 +37,12 @@ export default function BreakdownModule({ project, userRole }: BreakdownModulePr
         emotionalIntensity: selectedScene.emotionalIntensity || 5,
         characterMentalState: selectedScene.characterMentalState || '',
         location: selectedScene.location || '',
+        logistics: selectedScene.logistics || '',
+        production_notes: selectedScene.production_notes || '',
+        design_notes: selectedScene.design_notes || '',
+        sound_notes: selectedScene.sound_notes || '',
+        lighting_notes: selectedScene.lighting_notes || '',
+        availability_notes: selectedScene.availability_notes || '',
       });
     }
   }, [selectedScene]);
@@ -90,10 +97,20 @@ export default function BreakdownModule({ project, userRole }: BreakdownModulePr
     setEditData({ ...editData, [field]: current.filter((_, i) => i !== index) });
   };
 
-  const filteredScenes = scenes.filter(s => 
-    s.location.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    s.number.includes(searchQuery)
-  );
+  const filteredScenes = scenes.filter(s => {
+    const matchesSearch = s.location.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         s.number.includes(searchQuery);
+    
+    if (showOnlyMyScenes && userRole === ProductionRole.ACTOR) {
+      const userEmail = auth.currentUser?.email?.toLowerCase();
+      // Check if user's email or generic "Actor" is in the cast list
+      return matchesSearch && (
+        s.cast?.some(c => c.toLowerCase() === userEmail || c.toLowerCase() === 'actor')
+      );
+    }
+    
+    return matchesSearch;
+  });
 
   if (loading) return <div className="h-full flex items-center justify-center italic text-brand-gray-500 font-sans">Loading breakdown data...</div>;
 
@@ -134,6 +151,23 @@ export default function BreakdownModule({ project, userRole }: BreakdownModulePr
         {/* Left Sidebar: Scene List - Hidden on Mobile */}
         <div className="hidden md:flex w-80 border-r border-brand-gray-200 bg-white flex-col shrink-0">
           <div className="p-4 bg-brand-gray-50 border-b border-brand-gray-200">
+            {userRole === ProductionRole.ACTOR && (
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[10px] font-bold text-brand-gray-600 uppercase tracking-widest">My Scenes Only</span>
+                <button 
+                  onClick={() => setShowOnlyMyScenes(!showOnlyMyScenes)}
+                  className={cn(
+                    "w-8 h-4 rounded-full transition-colors relative",
+                    showOnlyMyScenes ? "bg-brand-blue" : "bg-brand-gray-300"
+                  )}
+                >
+                  <div className={cn(
+                    "absolute top-1 w-2 h-2 bg-white rounded-full transition-all",
+                    showOnlyMyScenes ? "right-1" : "left-1"
+                  )} />
+                </button>
+              </div>
+            )}
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-gray-400" size={14} />
               <input 
@@ -296,22 +330,78 @@ export default function BreakdownModule({ project, userRole }: BreakdownModulePr
               </div>
 
               <div className="space-y-6 border-t border-brand-gray-200 pt-8">
-                <TextareaField 
-                  label="Character Mental State" 
-                  value={editData.characterMentalState || ''} 
-                  onChange={(v) => setEditData({ ...editData, characterMentalState: v })}
-                />
-                <TextareaField 
-                  label="Director Notes" 
-                  value={editData.directorNotes || ''} 
-                  onChange={(v) => setEditData({ ...editData, directorNotes: v })}
-                />
-                <TextareaField 
-                  label="General Production Notes" 
-                  value={editData.notes || ''} 
-                  onChange={(v) => setEditData({ ...editData, notes: v })}
-                  rows={4}
-                />
+                {hasFieldAccess(userRole, 'breakdown', 'characterMentalState') && (
+                  <TextareaField 
+                    label="Character Mental State" 
+                    value={editData.characterMentalState || ''} 
+                    onChange={(v) => setEditData({ ...editData, characterMentalState: v })}
+                  />
+                )}
+                {hasFieldAccess(userRole, 'breakdown', 'directorNotes') && (
+                  <TextareaField 
+                    label="Director Notes" 
+                    value={editData.directorNotes || ''} 
+                    onChange={(v) => setEditData({ ...editData, directorNotes: v })}
+                  />
+                )}
+                
+                {hasFieldAccess(userRole, 'breakdown', 'logistics') && (
+                  <TextareaField 
+                    label="Logistics" 
+                    value={editData.logistics || ''} 
+                    onChange={(v) => setEditData({ ...editData, logistics: v })}
+                    placeholder="Transportation, equipment needs, etc."
+                  />
+                )}
+
+                {hasFieldAccess(userRole, 'breakdown', 'production_notes') && (
+                  <TextareaField 
+                    label="Production Manager Notes" 
+                    value={editData.production_notes || ''} 
+                    onChange={(v) => setEditData({ ...editData, production_notes: v })}
+                  />
+                )}
+
+                {hasFieldAccess(userRole, 'breakdown', 'design_notes') && (
+                  <TextareaField 
+                    label="Art Department / Design Notes" 
+                    value={editData.design_notes || ''} 
+                    onChange={(v) => setEditData({ ...editData, design_notes: v })}
+                  />
+                )}
+
+                {hasFieldAccess(userRole, 'breakdown', 'sound_notes') && (
+                  <TextareaField 
+                    label="Sound Recordist Notes" 
+                    value={editData.sound_notes || ''} 
+                    onChange={(v) => setEditData({ ...editData, sound_notes: v })}
+                  />
+                )}
+
+                {hasFieldAccess(userRole, 'breakdown', 'lighting_notes') && (
+                  <TextareaField 
+                    label="Lighting / Gaffer Notes" 
+                    value={editData.lighting_notes || ''} 
+                    onChange={(v) => setEditData({ ...editData, lighting_notes: v })}
+                  />
+                )}
+
+                {hasFieldAccess(userRole, 'breakdown', 'availability_notes') && (
+                  <TextareaField 
+                    label="Cast Availability / Issues" 
+                    value={editData.availability_notes || ''} 
+                    onChange={(v) => setEditData({ ...editData, availability_notes: v })}
+                  />
+                )}
+
+                {hasFieldAccess(userRole, 'breakdown', 'notes') && (
+                  <TextareaField 
+                    label="General Production Notes" 
+                    value={editData.notes || ''} 
+                    onChange={(v) => setEditData({ ...editData, notes: v })}
+                    rows={4}
+                  />
+                )}
               </div>
 
               {/* Script Reference */}

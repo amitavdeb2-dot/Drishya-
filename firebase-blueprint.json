@@ -93,12 +93,30 @@
         "sceneCount": { "type": "integer" }
       },
       "required": ["projectId", "fileName", "uploadDate", "version", "status"]
+    },
+    "ProjectMember": {
+      "title": "Project Member",
+      "description": "A person involved in the project with a specific role",
+      "type": "object",
+      "properties": {
+        "projectId": { "type": "string" },
+        "email": { "type": "string" },
+        "userId": { "type": "string" },
+        "role": { "type": "string", "enum": ["Director", "Assistant Director", "Production Manager", "Cinematographer", "Art Director", "Sound Recordist", "Lighting / Gaffer", "Actor"] },
+        "invitedAt": { "type": "string", "format": "date-time" },
+        "joinedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["projectId", "email", "role", "invitedAt"]
     }
   },
   "firestore": {
     "projects": {
       "schema": "Project",
       "description": "Collection of film projects"
+    },
+    "projectMembers": {
+      "schema": "ProjectMember",
+      "description": "Collection of team members and invites"
     },
     "scenes": {
       "schema": "Scene",

@@ -21,7 +21,7 @@ export async function deleteProject(projectId: string) {
   scriptSnap.forEach(d => batch.delete(d.ref));
 
   // 4. Team / Collaborative Memberships
-  const teamSnap = await getDocs(query(collection(db, 'collaborators'), where('projectId', '==', projectId)));
+  const teamSnap = await getDocs(query(collection(db, 'projectMembers'), where('projectId', '==', projectId)));
   teamSnap.forEach(d => batch.delete(d.ref));
 
   // 5. Schedule / Stripboard Items

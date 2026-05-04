@@ -16,7 +16,7 @@ import { Project, ProductionRole } from './types';
 import { OperationType, handleFirestoreError, cn, hasModuleAccess } from './lib/utils';
 import CollaboratorsModule from './components/CollaboratorsModule';
 
-type View = 'dashboard' | 'script' | 'breakdown' | 'storyboard' | 'stripboard' | 'schedule' | 'callsheet' | 'shots' | 'shoot' | 'collaborators';
+type View = 'dashboard' | 'script' | 'breakdown' | 'storyboard' | 'stripboard' | 'schedule' | 'callsheet' | 'shots' | 'shoot' | 'projectMembers';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -50,21 +50,21 @@ export default function App() {
         if (projSnap.exists()) {
           const projectData = { id: projSnap.id, ...projSnap.data() } as Project;
           
-          // 2. Check for existing collaboration
-          const collabQ = query(
-            collection(db, 'collaborators'),
+          // 2. Check for existing membership
+          const memberQ = query(
+            collection(db, 'projectMembers'),
             where('projectId', '==', projectId),
             where('userId', '==', u.uid)
           );
-          const collabSnap = await getDocs(collabQ);
+          const memberSnap = await getDocs(memberQ);
           
-          if (!collabSnap.empty || projectData.ownerId === u.uid) {
+          if (!memberSnap.empty || projectData.ownerId === u.uid) {
             // Already a member, just select it
             await handleSelectProject(projectData, u);
           } else {
             // 3. Not a member yet, check for pending email-based invite
             const inviteQ = query(
-              collection(db, 'collaborators'),
+              collection(db, 'projectMembers'),
               where('projectId', '==', projectId),
               where('email', '==', u.email?.toLowerCase())
             );
@@ -75,7 +75,7 @@ export default function App() {
               const inviteData = inviteSnap.docs[0].data();
               const membershipId = `${projectId}_${u.uid}`;
               
-              await setDoc(doc(db, 'collaborators', membershipId), {
+              await setDoc(doc(db, 'projectMembers', membershipId), {
                 ...inviteData,
                 userId: u.uid,
                 joinedAt: serverTimestamp()
@@ -109,7 +109,7 @@ export default function App() {
     } else {
       try {
         const q = query(
-          collection(db, 'collaborators'),
+          collection(db, 'projectMembers'),
           where('projectId', '==', project.id),
           where('userId', '==', activeUser?.uid)
         );
@@ -193,7 +193,7 @@ export default function App() {
         return selectedProject ? <CallsheetModule project={selectedProject} userRole={userRole} /> : <Dashboard user={user} onSelectProject={handleSelectProject} />;
       case 'shoot':
         return selectedProject ? <ShootMode project={selectedProject} userRole={userRole} /> : <Dashboard user={user} onSelectProject={handleSelectProject} />;
-      case 'collaborators':
+      case 'projectMembers':
         return selectedProject ? <CollaboratorsModule project={selectedProject} userRole={userRole} /> : <Dashboard user={user} onSelectProject={handleSelectProject} />;
       default:
         return (
@@ -212,7 +212,7 @@ export default function App() {
     { id: 'schedule', label: 'Shooting Schedule', icon: <Calendar size={18} /> },
     { id: 'callsheet', label: 'Call Sheet', icon: <ClipboardList size={18} /> },
     { id: 'shoot', label: 'Live Shoot Mode', icon: <Zap size={18} /> },
-    { id: 'collaborators', label: 'Team & Roles', icon: <Users size={18} /> },
+    { id: 'projectMembers', label: 'Production Team', icon: <Users size={18} /> },
   ];
 
   return (

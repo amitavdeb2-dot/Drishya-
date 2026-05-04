@@ -33,7 +33,7 @@ service cloud.firestore {
     }
 
     function isCollaborator(projectId) {
-      return isSignedIn() && exists(/databases/$(database)/documents/collaborators/$(projectId + "_" + request.auth.uid));
+      return isSignedIn() && exists(/databases/$(database)/documents/projectMembers/$(projectId + "_" + request.auth.uid));
     }
 
     function canAccessProject(projectId) {
@@ -47,6 +47,14 @@ service cloud.firestore {
              data.name is string && data.name.size() <= 200 &&
              data.ownerId is string &&
              (data.createdAt == request.time || data.createdAt is string);
+    }
+
+    function isValidProjectMember(data) {
+       return data.keys().hasAll(['projectId', 'email', 'role', 'invitedAt']) &&
+              isValidId(data.projectId) &&
+              data.email is string &&
+              data.role is string &&
+              (data.invitedAt == request.time || data.invitedAt is string);
     }
 
     function isValidScene(data) {
@@ -75,16 +83,17 @@ service cloud.firestore {
     // --- Collection Rules ---
 
     match /projects/{projectId} {
-      allow create: if isSignedIn() && isValidId(projectId);
-      allow list: if isSignedIn(); 
+      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(incoming());
+      // List rules must align with query filters
+      allow list: if isSignedIn();
       allow get: if isSignedIn() && (isOwner(existing()) || isCollaborator(projectId));
       allow update: if isSignedIn() && (isOwner(existing()) || isCollaborator(projectId)) && 
                     incoming().ownerId == existing().ownerId;
       allow delete: if isSignedIn() && isOwner(existing());
     }
 
-    match /collaborators/{collabId} {
-      allow create: if isSignedIn() && canAccessProject(incoming().projectId);
+    match /projectMembers/{memberId} {
+      allow create: if isSignedIn() && canAccessProject(incoming().projectId) && isValidProjectMember(incoming());
       allow read: if isSignedIn() && (
         isOwner(getProject(resource.data.projectId)) || 
         resource.data.userId == request.auth.uid || 
@@ -95,12 +104,13 @@ service cloud.firestore {
         existing().email == request.auth.token.email
       );
       allow delete: if isSignedIn() && isOwner(getProject(existing().projectId));
+      // Allow listing members
       allow list: if isSignedIn();
     }
 
     match /scenes/{sceneId} {
       allow create: if isSignedIn() && isValidScene(incoming()) && canAccessProject(incoming().projectId);
-      allow list: if isSignedIn();
+      allow list: if isSignedIn() && canAccessProject(resource.data.projectId);
       allow get: if isSignedIn() && canAccessProject(existing().projectId);
       allow update: if isSignedIn() && canAccessProject(existing().projectId) && 
                     isValidScene(incoming()) &&

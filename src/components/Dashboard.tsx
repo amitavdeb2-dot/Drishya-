@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { db, auth } from '../lib/firebase';
-import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, serverTimestamp, orderBy, updateDoc, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { Project } from '../types';
 import { Plus, Film, Clock, ChevronRight, MoreVertical, Trash2, Edit2, AlertTriangle, X, Loader2, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -43,64 +43,83 @@ export default function Dashboard({ user, onSelectProject }: DashboardProps) {
   const fetchProjects = async () => {
     try {
       // 0. Process any pending invitations for this email
-      const inviteQ = query(
-        collection(db, 'collaborators'),
-        where('email', '==', user.email.toLowerCase())
-      );
-      const inviteSnap = await getDocs(inviteQ);
-      for (const d of inviteSnap.docs) {
-        if (!d.data().userId) {
-          // Create/Update the deterministic membership doc
-          const membershipId = `${d.data().projectId}_${user.uid}`;
-          await setDoc(doc(db, 'collaborators', membershipId), {
-            ...d.data(),
-            userId: user.uid,
-            joinedAt: serverTimestamp()
-          });
-          // Delete the temporary invitation doc if it was different
-          if (d.id !== membershipId) {
-            await deleteDoc(d.ref);
+      try {
+        const inviteQ = query(
+          collection(db, 'projectMembers'),
+          where('email', '==', user.email.toLowerCase())
+        );
+        const inviteSnap = await getDocs(inviteQ);
+        for (const d of inviteSnap.docs) {
+          if (!d.data().userId) {
+            // Create/Update the deterministic membership doc
+            const membershipId = `${d.data().projectId}_${user.uid}`;
+            await setDoc(doc(db, 'projectMembers', membershipId), {
+              ...d.data(),
+              userId: user.uid,
+              joinedAt: serverTimestamp()
+            });
+            // Delete the temporary invitation doc if it was different
+            if (d.id !== membershipId) {
+              await deleteDoc(d.ref);
+            }
           }
         }
+      } catch (e) {
+        console.error("Invite processing failed", e);
+        handleFirestoreError(e, OperationType.LIST, 'projectMembers_invites', auth);
       }
 
       // 1. Fetch all collaborative links for this user
-      const collabQ = query(
-        collection(db, 'collaborators'),
-        where('userId', '==', user.uid)
-      );
-      const collabSnapshot = await getDocs(collabQ);
-      const collabProjectIds = collabSnapshot.docs.map(d => d.data().projectId);
+      let memberProjectIds: string[] = [];
+      try {
+        const memberQ = query(
+          collection(db, 'projectMembers'),
+          where('userId', '==', user.uid)
+        );
+        const memberSnapshot = await getDocs(memberQ);
+        memberProjectIds = memberSnapshot.docs.map(d => d.data().projectId);
+      } catch (e) {
+        console.error("Member query failed", e);
+        handleFirestoreError(e, OperationType.LIST, 'projectMembers_member', auth);
+      }
 
       // 2. Fetch owned projects
-      const ownedQ = query(
-        collection(db, 'projects'),
-        where('ownerId', '==', user.uid),
-        orderBy('createdAt', 'desc')
-      );
-      const ownedSnapshot = await getDocs(ownedQ);
-      const ownedProjects = ownedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+      let ownedProjects: Project[] = [];
+      try {
+        const ownedQ = query(
+          collection(db, 'projects'),
+          where('ownerId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
+        const ownedSnapshot = await getDocs(ownedQ);
+        ownedProjects = ownedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+      } catch (e) {
+        console.error("Owned projects query failed", e);
+        handleFirestoreError(e, OperationType.LIST, 'projects_owned', auth);
+      }
 
-      // 3. Fetch collaborated projects
-      let collaboratedProjects: Project[] = [];
-      if (collabProjectIds.length > 0) {
-        // Fetch up to 10 collaborated projects (Firestore IN clause limit)
-        const chunks = [];
-        for (let i = 0; i < collabProjectIds.length; i += 10) {
-          chunks.push(collabProjectIds.slice(i, i + 10));
-        }
-
-        const projectChunks = await Promise.all(chunks.map(async (chunk) => {
-          const q = query(collection(db, 'projects'), where('__name__', 'in', chunk));
-          const snap = await getDocs(q);
-          return snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
-        }));
-        collaboratedProjects = projectChunks.flat();
+      // 3. Fetch participated projects
+      let participatedProjects: Project[] = [];
+      if (memberProjectIds.length > 0) {
+        const fetchedProjects = await Promise.all(
+          memberProjectIds.map(async (projectId: string) => {
+            try {
+              const d = await getDoc(doc(db, 'projects', projectId));
+              if (d.exists()) {
+                return { id: d.id, ...d.data() } as Project;
+              }
+            } catch (e) {
+              console.warn("Could not fetch participated project:", projectId, e);
+            }
+            return null;
+          })
+        );
+        participatedProjects = fetchedProjects.filter((p): p is Project => p !== null);
       }
 
       // Merge results
       const allProjects = [...ownedProjects];
-      collaboratedProjects.forEach(cp => {
+      participatedProjects.forEach(cp => {
         if (!allProjects.find(ap => ap.id === cp.id)) {
           allProjects.push(cp);
         }
@@ -111,8 +130,9 @@ export default function Dashboard({ user, onSelectProject }: DashboardProps) {
         const bDate = b.createdAt?.seconds || Date.now() / 1000;
         return bDate - aDate;
       }));
-    } catch (error) {
-      handleFirestoreError(error, OperationType.LIST, 'projects', auth);
+    } catch (error: any) {
+      const path = error.path || 'unknown';
+      handleFirestoreError(error, OperationType.LIST, path, auth);
     } finally {
       setLoading(false);
     }

@@ -53,13 +53,22 @@ export interface Scene {
   pageCount?: number;
   order: number;
   status?: SceneStatus | string;
+  logistics?: string;
+  production_notes?: string;
+  design_notes?: string;
+  sound_notes?: string;
+  lighting_notes?: string;
+  availability_notes?: string;
 }
 
 export enum ProductionRole {
   DIRECTOR = 'Director',
   AD = 'Assistant Director',
+  PM = 'Production Manager',
   DOP = 'Cinematographer',
   ART = 'Art Director',
+  SOUND = 'Sound Recordist',
+  GAFFER = 'Lighting / Gaffer',
   ACTOR = 'Actor'
 }
 
