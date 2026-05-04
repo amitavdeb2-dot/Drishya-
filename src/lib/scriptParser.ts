@@ -166,10 +166,63 @@ async function parseRTF(file: File): Promise<ParsedScene[]> {
   return parseScriptText(plainText);
 }
 
+function normalizeText(text: string): string {
+  console.log("[Parser] Normalizing text structure...");
+  
+  // 1. Spacing after periods if missing (e.g. "17.INT." -> "17. INT.")
+  // and ensure INT./EXT. are separated from numbers
+  let normalized = text
+    .replace(/\.([A-Z])/g, '. $1')
+    .replace(/(\d+)([A-Z])/g, '$1 $2') // "17INT" -> "17 INT"
+    .replace(/(\d+)\.([A-Z])/g, '$1. $2'); // "17.INT" -> "17. INT"
+
+  // 2. Spacing around dashes in potential headers (e.g. ROOM-DAY -> ROOM - DAY)
+  normalized = normalized.replace(/([A-Z0-9])-(?=[A-Z0-9])/g, '$1 - ');
+
+  // 3. Normalize multiple spaces
+  normalized = normalized.replace(/[ \t]+/g, ' ');
+
+  const rawLines = normalized.split(/\r?\n/);
+  const resultLines: string[] = [];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    let line = rawLines[i].trim();
+    if (!line) continue;
+
+    // 4. Handle Split Headings: If a line is just a number (e.g. "17.") and next starts with INT/EXT
+    const numberOnlyMatch = line.match(/^(\d+\.?)$/);
+    if (numberOnlyMatch && i + 1 < rawLines.length) {
+      const nextLine = rawLines[i+1].trim();
+      const headerStartRegex = /^(INT|EXT|I\/E|INT\/EXT|EXT\/INT)/i;
+      
+      if (headerStartRegex.test(nextLine)) {
+        line = line + " " + nextLine;
+        i++; // Skip the next line as it's now merged
+      }
+    }
+    
+    resultLines.push(line);
+  }
+
+  return resultLines.join('\n');
+}
+
 function parseScriptText(text: string): ParsedScene[] {
   console.log(`[Parser] Running scene segmentation on ${text.length} characters...`);
-  const scenes = parseScenes(text);
-  console.log("Scenes found:", scenes.length);
+  
+  const normalizedText = normalizeText(text);
+  
+  // DEBUG LOGGING: First 20 lines of normalized text
+  const debugLines = normalizedText.split('\n').slice(0, 20);
+  console.log("[Parser] --- DEBUG: FIRST 20 LINES OF NORMALIZED TEXT ---");
+  debugLines.forEach((l, i) => console.log(`${i+1}: ${l}`));
+  console.log("[Parser] -----------------------------------------------");
+
+  const scenes = parseScenes(normalizedText);
+
+  // DEBUG LOGGING: Number of detected scenes
+  console.log(`[Parser] Total detected scenes: ${scenes.length}`);
+  
   return scenes;
 }
 
@@ -216,7 +269,8 @@ export function parseScenes(scriptText: string): ParsedScene[] {
   let currentScene: any = null
   let sceneCounter = 1
 
-  const sceneRegex = /^\s*(?:\d+[\.\s]*)?(INT|EXT|I\/E|INT\/EXT|EXT\/INT)[\.\s]/i
+  // Better regex for flexible scene detection
+  const sceneRegex = /^\s*(?:\d+[\.\s]*)?(INT\.|EXT\.|INT\/EXT\.|EXT\/INT\.|I\/E\.|INT|EXT|I\/E)[\.\s]/i
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim()
@@ -224,37 +278,29 @@ export function parseScenes(scriptText: string): ParsedScene[] {
     if (!line) continue
 
     if (sceneRegex.test(line)) {
-      console.log("NEW SCENE DETECTED:", line)
-
       if (currentScene) {
         scenes.push(currentScene)
       }
 
-      const typeMatch = line.match(/INT|EXT/i)
-      const timeMatch = line.match(/DAY|NIGHT/i)
+      const typeMatch = line.match(/INT|EXT|I\/E/i)
+      const timeMatch = line.match(/(?:(?!\b(INT|EXT)\b)\b(DAY|NIGHT|MORNING|EVENING|DAWN|DUSK|LATER|CONTINUOUS|MOMENTS LATER|SUNRISE|SUNSET)\b)/i)
 
       currentScene = {
         id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 11),
-
-        sceneNumber: sceneCounter++,          // ✅ important
+        sceneNumber: sceneCounter++,
         scriptNumber: extractSceneNumber(line),
-
         heading: cleanHeading(line),
         location: extractLocation(line),
-
         type: typeMatch ? typeMatch[0].toUpperCase() : "INT",
         time: timeMatch ? timeMatch[0].toUpperCase() : "DAY",
-
         content: [],
       }
 
     } else if (currentScene) {
-      // Add content to current scene
       currentScene.content.push(line)
     }
   }
 
-  // 🧠 VERY IMPORTANT: push last scene
   if (currentScene) {
     scenes.push(currentScene)
   }
