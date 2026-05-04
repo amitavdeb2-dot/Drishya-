@@ -1,7 +1,7 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
-import { ProductionRole } from '../types';
+import { ProductionRole, Scene } from '../types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -103,6 +103,28 @@ export function hasFieldAccess(role: ProductionRole | string | undefined, module
   const rolePermissions = ROLE_CONFIG[role as ProductionRole];
   if (!rolePermissions) return true;
   return rolePermissions.fields[moduleName as keyof typeof rolePermissions.fields]?.includes(fieldName) || false;
+}
+
+export function groupScenes(scenes: Scene[]) {
+  const groups: Record<string, { location: string; time: string; scenes: Scene[] }> = {};
+
+  scenes.forEach(scene => {
+    const location = scene.location || "UNSORTED";
+    const time = (scene.dayNight || "DAY") as string;
+    const key = `${location}__${time}`;
+
+    if (!groups[key]) {
+      groups[key] = {
+        location,
+        time,
+        scenes: []
+      };
+    }
+
+    groups[key].scenes.push(scene);
+  });
+
+  return Object.values(groups);
 }
 
 export enum OperationType {

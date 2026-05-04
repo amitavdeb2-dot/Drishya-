@@ -57,12 +57,14 @@ export default function App() {
     setCurrentView('script');
   };
 
-  const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, googleProvider);
-    } catch (error) {
-      console.error("Login failed", error);
-    }
+  const handleLogin = () => {
+    signInWithPopup(auth, googleProvider)
+      .then((result) => {
+        console.log("SUCCESS:", result.user);
+      })
+      .catch((error) => {
+        console.error("ERROR:", error);
+      });
   };
 
   const handleLogout = () => signOut(auth);
@@ -98,7 +100,7 @@ export default function App() {
             className="flex items-center justify-center w-full gap-3 bg-brand-blue text-white px-6 py-4 rounded font-sans font-bold hover:bg-blue-700 transition-all uppercase tracking-widest text-xs shadow-sm"
           >
             <LogIn size={18} />
-            Sign in with Google
+            Login with Google
           </button>
         </motion.div>
       </div>

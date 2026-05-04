@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { OperationType, handleFirestoreError, cn, hasFieldAccess, hasPermission } from '../lib/utils';
+import { OperationType, handleFirestoreError, cn, hasFieldAccess, hasPermission, groupScenes } from '../lib/utils';
 
 interface StripboardModuleProps {
   project: Project;
@@ -126,13 +126,11 @@ export default function StripboardModule({ project, userRole }: StripboardModule
   // Suggestion logic
   const getSuggestions = () => {
     if (groupingType === 'LOCATION') {
-      const groups: Record<string, Scene[]> = {};
-      unscheduledScenes.forEach(s => {
-        const location = s.location || "MISC";
-        if (!groups[location]) groups[location] = [];
-        groups[location].push(s);
-      });
-      return Object.entries(groups).filter(([_, items]) => items.length > 1);
+      const groups = groupScenes(unscheduledScenes);
+      // Map it back to the [string, Scene[]][] format expected by the UI
+      return groups
+        .filter(g => g.scenes.length > 1)
+        .map(g => [`${g.location} (${g.time})`, g.scenes] as [string, Scene[]]);
     } else {
       const groups: Record<string, Scene[]> = {};
       unscheduledScenes.forEach(s => {
