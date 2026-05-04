@@ -57,14 +57,13 @@ export default function App() {
     setCurrentView('script');
   };
 
-  const handleLogin = () => {
-    signInWithPopup(auth, googleProvider)
-      .then((result) => {
-        console.log("SUCCESS:", result.user);
-      })
-      .catch((error) => {
-        console.error("ERROR:", error);
-      });
+  const handleLogin = async () => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      console.log("SUCCESS:", result.user);
+    } catch (error) {
+      console.error("ERROR:", error);
+    }
   };
 
   const handleLogout = () => signOut(auth);
