@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { db, auth } from '../lib/firebase';
 import { collection, query, where, getDocs, addDoc, deleteDoc, doc, serverTimestamp } from 'firebase/firestore';
 import { Project, ProductionRole, Collaborator } from '../types';
-import { Users, Plus, Mail, Shield, Trash2, Loader2, CheckCircle2 } from 'lucide-react';
+import { Users, Plus, Mail, Shield, Trash2, Loader2, CheckCircle2, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { OperationType, handleFirestoreError, cn, hasPermission } from '../lib/utils';
 
@@ -18,8 +18,16 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
   const [email, setEmail] = useState('');
   const [selectedRole, setSelectedRole] = useState<ProductionRole>(ProductionRole.AD);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const canManageTeam = hasPermission(userRole, 'manage_team');
+
+  const copyInviteLink = () => {
+    const url = `${window.location.origin}?project=${project.id}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   useEffect(() => {
     fetchCollaborators();
@@ -56,6 +64,7 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
         return;
       }
 
+      // 1. Add to Firestore
       await addDoc(collection(db, 'collaborators'), {
         projectId: project.id,
         email: email.toLowerCase(),
@@ -63,6 +72,28 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
         invitedBy: auth.currentUser?.uid,
         invitedAt: serverTimestamp()
       });
+
+      // 2. Send Invitation Email via our Server (Brevo)
+      const inviteLink = `${window.location.origin}?project=${project.id}`;
+      try {
+        const response = await fetch('/api/send-invite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: email.toLowerCase(),
+            projectName: project.name,
+            inviteLink: inviteLink,
+            roleName: selectedRole
+          })
+        });
+        
+        if (!response.ok) {
+          const errData = await response.json();
+          console.error("Email API Error:", errData.error);
+        }
+      } catch (err) {
+        console.error("Failed to trigger invite email:", err);
+      }
 
       setEmail('');
       fetchCollaborators();
@@ -94,10 +125,29 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
 
         {canManageTeam && (
           <section className="bg-white border border-brand-gray-200 rounded-2xl p-6 md:p-8 shadow-sm">
-            <h2 className="text-sm font-black uppercase tracking-widest text-brand-gray-900 mb-6 flex items-center gap-2">
-              <Plus size={16} className="text-brand-blue" />
-              Invite Production Staff
-            </h2>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <h2 className="text-sm font-black uppercase tracking-widest text-brand-gray-900 flex items-center gap-2">
+                <Plus size={16} className="text-brand-blue" />
+                Invite Production Staff
+              </h2>
+              <button
+                onClick={copyInviteLink}
+                className="flex items-center gap-2 px-4 py-2 bg-brand-gray-50 border border-brand-gray-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-brand-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/20 transition-all active:scale-95"
+              >
+                {copied ? (
+                  <>
+                    <Check size={14} />
+                    Link Copied
+                  </>
+                ) : (
+                  <>
+                    <Copy size={14} />
+                    Copy Invite Link
+                  </>
+                )}
+              </button>
+            </div>
+            
             <form onSubmit={handleInvite} className="grid grid-cols-1 md:grid-cols-12 gap-4">
               <div className="md:col-span-6">
                 <label className="block text-[10px] font-bold uppercase text-brand-gray-400 mb-2 tracking-widest">Email Address</label>

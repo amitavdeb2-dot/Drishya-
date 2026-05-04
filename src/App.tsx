@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { auth, googleProvider, signInWithPopup, signOut, onAuthStateChanged, User } from './lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { LogIn, Film, FileText, Layout, Image as ImageIcon, Calendar, ClipboardList, List, Plus, LogOut, ChevronLeft, Home, Zap, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -28,27 +28,96 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
-      setLoading(false);
+      if (u) {
+        handleUrlParams(u);
+      } else {
+        setLoading(false);
+      }
     });
     return () => unsubscribe();
   }, []);
 
-  const handleSelectProject = async (project: Project) => {
+  const handleUrlParams = async (u: User) => {
+    const params = new URLSearchParams(window.location.search);
+    const projectId = params.get('project');
+    
+    if (projectId) {
+      try {
+        // 1. Check if user is already a collaborator or owner
+        const projRef = doc(db, 'projects', projectId);
+        const projSnap = await getDoc(projRef);
+        
+        if (projSnap.exists()) {
+          const projectData = { id: projSnap.id, ...projSnap.data() } as Project;
+          
+          // 2. Check for existing collaboration
+          const collabQ = query(
+            collection(db, 'collaborators'),
+            where('projectId', '==', projectId),
+            where('userId', '==', u.uid)
+          );
+          const collabSnap = await getDocs(collabQ);
+          
+          if (!collabSnap.empty || projectData.ownerId === u.uid) {
+            // Already a member, just select it
+            await handleSelectProject(projectData, u);
+          } else {
+            // 3. Not a member yet, check for pending email-based invite
+            const inviteQ = query(
+              collection(db, 'collaborators'),
+              where('projectId', '==', projectId),
+              where('email', '==', u.email?.toLowerCase())
+            );
+            const inviteSnap = await getDocs(inviteQ);
+            
+            if (!inviteSnap.empty) {
+              // Found a pending invite! Complete the joining process
+              const inviteData = inviteSnap.docs[0].data();
+              const membershipId = `${projectId}_${u.uid}`;
+              
+              await setDoc(doc(db, 'collaborators', membershipId), {
+                ...inviteData,
+                userId: u.uid,
+                joinedAt: serverTimestamp()
+              });
+              
+              // Clean up temporary invite if it was different
+              if (inviteSnap.docs[0].id !== membershipId) {
+                await deleteDoc(inviteSnap.docs[0].ref);
+              }
+              
+              // Now select the project
+              await handleSelectProject(projectData, u);
+            }
+          }
+        }
+      } catch (e) {
+        console.error("Invite processing failed", e);
+      }
+    }
+    
+    setLoading(false);
+    // Clear URL params without reloading to keep it clean
+    window.history.replaceState({}, document.title, window.location.pathname);
+  };
+
+  const handleSelectProject = async (project: Project, forceUser?: User | null) => {
+    const activeUser = forceUser !== undefined ? forceUser : user;
     setSelectedProject(project);
-    if (project.ownerId === user?.uid) {
+    if (project.ownerId === activeUser?.uid) {
       setUserRole(ProductionRole.DIRECTOR);
     } else {
       try {
         const q = query(
           collection(db, 'collaborators'),
           where('projectId', '==', project.id),
-          where('userId', '==', user?.uid)
+          where('userId', '==', activeUser?.uid)
         );
         const snap = await getDocs(q);
         if (!snap.empty) {
           setUserRole(snap.docs[0].data().role as ProductionRole);
         } else {
-          setUserRole(undefined); // Should not happen if they saw it in dashboard
+          setUserRole(undefined);
         }
       } catch (e) {
          console.error("Error fetching role", e);
