@@ -32,7 +32,7 @@ async function startServer() {
         },
         body: JSON.stringify({
           sender: {
-            name: process.env.BREVO_SENDER_NAME || "Drishya Invites",
+            name: process.env.BREVO_SENDER_NAME || "Drishya",
             email: process.env.BREVO_SENDER_EMAIL || "no-reply@drishya.app"
           },
           to: [{ email: toEmail }],
@@ -42,7 +42,7 @@ async function startServer() {
               <body style="font-family: sans-serif; line-height: 1.6; color: #333; background-color: #f9fafb; padding: 40px 20px;">
                 <div style="max-width: 600px; margin: 0 auto; padding: 40px; border: 1px solid #e5e7eb; border-radius: 16px; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
                   <div style="text-align: center; margin-bottom: 32px;">
-                    <div style="width: 48px; h-48px; background-color: #2563eb; color: white; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; line-height: 48px;">
+                    <div style="width: 48px; height: 48px; background-color: #2563eb; color: white; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 24px; font-weight: bold; line-height: 48px;">
                       D
                     </div>
                   </div>
@@ -73,13 +73,17 @@ async function startServer() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(`Brevo API Error: ${JSON.stringify(errorData)}`);
+        console.error("Brevo API Error Details:", errorData);
+        return res.status(response.status).json({ 
+          error: errorData.message || "Brevo failed to send email",
+          code: errorData.code 
+        });
       }
 
       res.json({ success: true, message: "Invite email sent successfully" });
     } catch (error) {
-      console.error("Error sending email via Brevo:", error);
-      res.status(500).json({ error: "Failed to send email invitation" });
+      console.error("Server processing error:", error);
+      res.status(500).json({ error: "Failed to process invitation email" });
     }
   });
 

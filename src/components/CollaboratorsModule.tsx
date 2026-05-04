@@ -89,9 +89,11 @@ export default function CollaboratorsModule({ project, userRole }: Collaborators
         
         if (!response.ok) {
           const errData = await response.json();
-          console.error("Email API Error:", errData.error);
+          setError(`Email service error: ${errData.error}. Check if your sender email is verified in Brevo.`);
+          console.error("Email API Error:", errData);
         }
       } catch (err) {
+        setError("Technical error connecting to email service.");
         console.error("Failed to trigger invite email:", err);
       }
 
